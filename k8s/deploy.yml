@@ -1,0 +1,65 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jesstest11999-ingress
+  labels:
+    app: jesstest11999
+    backstage.io/kubernetes-id: jesstest11999 
+spec:
+  rules:
+    - host: api-jesstest11999-jessteste-dev.empcbr.thoughtworks-labs.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jesstest11999
+                port: 
+                  number: 80
+  tls:
+  - hosts:
+    - api-jesstest11999-jessteste-dev.empcbr.thoughtworks-labs.net
+    secretName: letencryptkey
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jesstest11999
+  labels:
+    app: jesstest11999
+    backstage.io/kubernetes-id: jesstest11999
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: jesstest11999
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jesstest11999
+  labels:
+    app: jesstest11999
+    backstage.io/kubernetes-id: jesstest11999
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 5
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: jesstest11999
+  template:
+    metadata:
+      labels:
+        app: jesstest11999
+    spec:
+      containers:
+      - name: jesstest11999
+        image: 626109959667.dkr.ecr.us-east-1.amazonaws.com/jesstest11999:{image-tag}
+        ports:
+        - containerPort: 8080

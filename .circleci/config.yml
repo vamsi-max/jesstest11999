@@ -1,0 +1,125 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@3.0.0
+  serverless: circleci/serverless-framework@1.0.1
+
+parameters:
+  prospect:
+    type: string
+    default: "jessteste-dev"
+  project:
+    type: string
+    default: "jesstest11999"
+  api:
+    type: string
+    default: "jesstest11999"
+  region:
+    type: string
+    default: "us-east-1"
+  instance_id:
+    type: string
+    default: "i-0015190c1142db5e9"
+
+jobs:
+  build:
+    docker:
+      - image: cimg/openjdk:19.0.1
+    steps:
+      - checkout
+      - run:
+          name: build application
+          command: mvn clean install
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ./*
+
+
+  quality:
+    docker:
+      - image: sonarsource/sonar-scanner-cli
+    steps:
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Code analysis
+          command: sonar-scanner -Dsonar.login=$SONAR_LOGIN_DEV -Dsonar.host.url=http://sonar-dev.empcbr.thoughtworks-labs.net
+
+  tests:
+    docker:
+      - image: cimg/openjdk:19.0.1
+    steps:
+      - checkout
+      - run:
+          name: unitary test
+          command: mvn test
+
+
+  create-docker-image:
+    docker:
+      - image: circleci/python:3.9
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ./
+      - run:
+          command: |
+            pip3.9 install awscli
+      - setup_remote_docker:
+          version: 20.10.11
+          docker_layer_caching: true
+      - run:
+          command: |
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 626109959667.dkr.ecr.us-east-1.amazonaws.com
+            SHORT_SHA1=$(echo $CIRCLE_SHA1 | cut -c -7)
+            docker image build . --tag << pipeline.parameters.api >>:${SHORT_SHA1}
+            docker tag << pipeline.parameters.api >>:${SHORT_SHA1} 626109959667.dkr.ecr.us-east-1.amazonaws.com/<< pipeline.parameters.api >>:${SHORT_SHA1}
+            docker tag << pipeline.parameters.api >>:${SHORT_SHA1} 626109959667.dkr.ecr.us-east-1.amazonaws.com/<< pipeline.parameters.api >>:latest
+            docker push 626109959667.dkr.ecr.us-east-1.amazonaws.com/<< pipeline.parameters.api >>:${SHORT_SHA1}
+            docker push 626109959667.dkr.ecr.us-east-1.amazonaws.com/<< pipeline.parameters.api >>:latest
+  deploy-app:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - attach_workspace:
+          at: ./
+      - checkout
+      - aws-cli/setup
+      - run: 
+          command: |
+            SHORT_SHA1=$(echo $CIRCLE_SHA1 | cut -c -7)
+            sed 's|{image-tag}|'$SHORT_SHA1'|g' k8s/deploy.yml > deploy.yml
+            FILE_VALUE=$(cat deploy.yml | base64 -w 0)
+            echo "{ \"Parameters\": { \"commands\": [ \"#!/bin/bash\", \"echo $FILE_VALUE | base64 -d > /tmp/file.yml\", \"runuser ubuntu -c 'kubectl apply -f /tmp/file.yml'\"]}}" > parameters.json
+            aws ssm send-command --document-name "AWS-RunShellScript" --instance-ids "<< pipeline.parameters.instance_id >>" --region "<< pipeline.parameters.region>>" --cli-input-json file://parameters.json
+workflows:
+  deploy:
+    jobs:
+      - build
+      - tests:
+          requires:
+            - build
+      - quality:
+          context:
+            - Demo-DX
+          requires:
+            - tests
+      - create-docker-image:
+          filters:
+            branches:
+              only:
+                - main
+          context:
+            - Demo-DX
+          requires:
+            - quality
+      - deploy-app:
+          filters:
+            branches:
+              only:
+                - main
+          context:
+            - Demo-DX
+          requires:
+            - create-docker-image

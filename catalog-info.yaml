@@ -1,0 +1,23 @@
+
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: "jesstest11999"
+  description: "teste"
+  links:
+    - url: https://api-jesstest11999-jessteste-dev.empcbr.thoughtworks-labs.net/swagger-ui.html
+      title: jesstest11999
+      icon: dashboard
+  annotations:
+    circleci.com/project-slug: github/platform-dx/jesstest11999
+    backstage.io/techdocs-ref: dir:.
+    github.com/project-slug:  platform-dx/jesstest11999
+    sonarqube.org/project-key: "jesstest11999"
+    backstage.io/kubernetes-label-selector: "app=jesstest11999"
+    backstage.io/adr-location: docs/adrs/
+spec:
+  type: service
+  lifecycle: experimental
+  owner: "jess"
+  providesApis:
+    - "jesstest11999"
